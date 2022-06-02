@@ -1,57 +1,66 @@
-import { Component, OnInit } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import {map} from 'rxjs/operators'
-import { stringify } from 'querystring';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { Post } from './post.model';
+import { PostService } from './post.service';
+import { map } from 'rxjs/operators';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   loadedPosts= [] ;
+  isFetching = false;
+  error = null;
+  private errorSub :Subscription;
 
-  constructor(private http: HttpClient) {}
+  constructor(private postService: PostService) {}
+  ngOnDestroy(): void {
+    this.errorSub.unsubscribe();
+  }
 
   ngOnInit() {
-      this.fetchPosts();
-    // console.log(this.loadedPosts);
+    this.onFetchPosts();
   }
 
   onCreatePost(postData: Post) {
     // Send Http request
+    this.postService.ceateAndStorePost(postData.title, postData.content);
 
-    this.http.post<{name: string}>('https://angularhttp-d77bb-default-rtdb.firebaseio.com/posts.json', postData )
-
-      .subscribe( (responseData => {
-        console.log(responseData);
-      }));
   }
 
   onFetchPosts() {
     // Send Http request
-    this.fetchPosts()
+    this.errorSub = this.postService.error.subscribe(errorMessage => {
+      this.error =errorMessage;
+    });
+
+    this.isFetching = true;
+    this.postService.fetchPost()
+      .subscribe(post => {
+        this.isFetching=false;
+        this.loadedPosts =post;
+      }, error => {
+        this.isFetching = false;
+        this.error =error.message;
+        console.log(error);
+
+      });
   }
 
   onClearPosts() {
-    // Send Http request
+    this.postService.deleteAllPost().subscribe(() => {
+      // this.loadedPosts = [];
+      this.onFetchPosts();
+
+    });
+    // this.onFetchPosts();
   }
 
-  private fetchPosts(){
-    this.http.get<{[key: string]: Post}>('https://angularhttp-d77bb-default-rtdb.firebaseio.com/posts.json')
-    .pipe(map(responseData  => {
-      const postArray: Post[] = [];
-      for(const key in responseData ){
-        if(responseData.hasOwnProperty(key)){
-          postArray.push({...responseData[key], id: key});
-        }
-      }
-      return postArray;
-    }))
-    .subscribe(post => {
-      // console.log(post);
-     this.loadedPosts = post;
-    })
+  onHandleError(){
+    this.error = null;
   }
+
+
 }
